@@ -172,6 +172,11 @@ app.post('/register', async (req, res) => {
     const { username, password } = req.body;
     const hashedPassword = await cryptPSW(password);
 
+    const checkUsername = await User.findOne({ where: {username: username }});
+    if (checkUsername) {
+      return res.status(201).json({ message: 'Username already taken' });
+    }
+    
     await User.create({
       username: username,
       password: hashedPassword,

@@ -31,7 +31,10 @@ const Register = async (values) => {
             setTimeout(() =>{
                 window.location.replace("/login");
             }, 1500)
-        } else {
+        } else if (response.status === 201) {
+            Notify.warning('Register', 'Username is already registered');
+        } 
+        else {
             throw new Error('error registering user');
         }
     }
