@@ -1,8 +1,9 @@
 // models/user.js
 
 const { Sequelize, DataTypes } = require('sequelize');
-const sequelize = new Sequelize(process.env.SEQ_CONNECTION);
-
+const sequelize = new Sequelize(process.env.SEQ_CONNECTION, {
+  dialectModule: require('pg')
+});
 const Todo = sequelize.define('todo', {
   user_id: {
     type: DataTypes.INTEGER,
