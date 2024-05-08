@@ -1,3 +1,15 @@
+<div align="center">
+  <a href="https://choosealicense.com/licenses/mit/">
+    <img src="https://img.shields.io/badge/LICENSE-MIT-blue?style=flat-square" alt="MIT License">
+  </a>
+  
+  <img src="https://img.shields.io/badge/BUILD-PASSING-green?style=flat-square" alt="Build Passing">
+</div>
+
+<br/>
+<div align="center">
+    <img src="https://github.com/shehari007/full-stack-todo-web-app/blob/main/Frontend/public/main-logo.png?raw=true" height="250px" width="250px">
+</div>
 
 # Full Stack Todo Web App
 
