@@ -1,0 +1,7 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+Server/node_modules
+Frontend/node_modules
+
+Frontend/.env
+Server/.env
