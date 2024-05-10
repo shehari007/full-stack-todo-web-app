@@ -8,8 +8,10 @@ const { Text } = Typography
 const CreateTodoModal = ({ submitted }) => {
     const [form] = Form.useForm();
     const [modalVisible, setModalVisible] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const handleOk = async (values) => {
+        setLoading(true);
         let updatedValues = {
             ...values,
             time: dayjs(values.time).format('DD-MM-YYYY'),
@@ -17,8 +19,10 @@ const CreateTodoModal = ({ submitted }) => {
         const result = await TodoListService.CreateTodo(updatedValues);
         if (result === true) {
             submitted(true);
+            setLoading(false);
             setModalVisible(false);
         }
+        setLoading(false);
     };
 
     const showCreateModal = () => {
@@ -59,10 +63,10 @@ const CreateTodoModal = ({ submitted }) => {
                     </Form.Item>
                     <Flex justify="flex-end">
                         <Form.Item>
-                            <Button type="primary" style={{ marginRight: 8 }} danger onClick={handleCancel} >
+                            <Button  type="primary" style={{ marginRight: 8 }} danger onClick={handleCancel} >
                                 Cancel
                             </Button>
-                            <Button type="primary" htmlType="submit">
+                            <Button loading={loading} type="primary" htmlType="submit">
                                 Submit
                             </Button>
                         </Form.Item>

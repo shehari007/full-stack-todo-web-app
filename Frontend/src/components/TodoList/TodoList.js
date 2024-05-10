@@ -13,10 +13,13 @@ const TodoList = () => {
 
     const [listData, setListData] = useState(null);
     const [filteredList, setFilteredList] = useState(null);
+    const [loadingList, setLoadingList] = useState(false);
 
     const getData = async () => {
+        setLoadingList(true);
         const data = await TodoListService.GetAllTodoList();
         setListData(data);
+        setLoadingList(false);
     }
 
     useEffect(() => {
@@ -39,6 +42,7 @@ const TodoList = () => {
     }
 
     const onChange = async (e, todoID) => {
+        setLoadingList(true);
         const checked = e.target.checked;
         let res = await TodoListService.UpdateCheckTodo(todoID, checked);
         if (res === true) {
@@ -85,7 +89,7 @@ const TodoList = () => {
                 scroll={{ x: 'max-width' }}
                 style={{ boxShadow: '0 4px 8px 0 rgba(0, 0, 0, 0.3)' }}
                 columns={columns}
-                loading={!listData ? true : false}
+                loading={loadingList}
                 footer={() =>
                     <><Text strong>Total: </Text><Text>{listData && listData.length} </Text>
                         {' '}

@@ -8,14 +8,17 @@ import TodoListService from '../../utils/TodoListService/TodoListService';
 const { Text } = Typography
 
 const UpdateTodoModal = ({ rowData, submitted }) => {
+    
     const updatedRowData = {
         ...rowData,
         time: dayjs(rowData.time, 'DD-MM-YYYY'),
     }
     const [form] = Form.useForm();
     const [modalVisible, setModalVisible] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const handleOk = async (values) => {
+        setLoading(true);
         let updatedValues = {
             ...values,
             time: dayjs(values.time).format('DD-MM-YYYY'),
@@ -23,8 +26,10 @@ const UpdateTodoModal = ({ rowData, submitted }) => {
         const result = await TodoListService.UpdateTodo(updatedValues, updatedRowData.id);
         if (result === true) {
             submitted(true);
+            setLoading(false);
             setModalVisible(false);
         }
+        setLoading(false);
     };
 
     const showUpdateModal = () => {
@@ -69,7 +74,7 @@ const UpdateTodoModal = ({ rowData, submitted }) => {
                             <Button type="primary" style={{ marginRight: 8 }} danger onClick={handleCancel} >
                                 Cancel
                             </Button>
-                            <Button type="primary" htmlType="submit">
+                            <Button loading={loading} type="primary" htmlType="submit">
                                 Submit
                             </Button>
                         </Form.Item>

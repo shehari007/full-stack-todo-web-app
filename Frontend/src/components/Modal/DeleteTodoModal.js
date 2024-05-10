@@ -10,13 +10,17 @@ const DeleteTodoModal = ({ rowData, submitted }) => {
    
     const [form] = Form.useForm();
     const [modalVisible, setModalVisible] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const handleOk = async () => {
+        setLoading(true);
         const result = await TodoListService.DelTodo(rowData.id);
         if (result === true) {
             submitted(true);
+            setLoading(false);
             setModalVisible(false);
         }
+        setLoading(false);
     };
 
     const showUpdateModal = () => {
@@ -41,7 +45,7 @@ const DeleteTodoModal = ({ rowData, submitted }) => {
                 onCancel={handleCancel}
                 onOk={handleOk}
                 okText={"Yes"}
-                okButtonProps={{type: "primary", danger:true}}
+                okButtonProps={{type: "primary", danger:true, loading: loading}}
                 cancelText={"No"}
                 cancelButtonProps={{type: "primary", danger:false}}
                 centered
