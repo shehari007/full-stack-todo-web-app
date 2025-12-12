@@ -1,40 +1,48 @@
-import { notification } from "antd";
+import { App } from "antd";
 
-const success = (title, desc) => {
-  notification.open({
-    placement: 'topRight',
-    message: title,
-    type: 'success',
-    description:
-      desc
-  });
-}
+// Hook-based notification - use this in components
+export const useNotify = () => {
+  const { notification, message } = App.useApp();
 
-const warning = (title, desc) => {
-  notification.open({
-    placement: 'topRight',
-    message: title,
-    type: 'warning',
-    description:
-      desc
-  });
-}
+  return {
+    success: (title, desc) => {
+      notification.success({
+        placement: 'topRight',
+        message: title,
+        description: desc,
+      });
+    },
+    warning: (title, desc) => {
+      notification.warning({
+        placement: 'topRight',
+        message: title,
+        description: desc,
+      });
+    },
+    error: (title, desc) => {
+      notification.error({
+        placement: 'topRight',
+        message: title,
+        description: desc,
+      });
+    },
+    info: (title, desc) => {
+      notification.info({
+        placement: 'topRight',
+        message: title,
+        description: desc,
+      });
+    },
+    // Quick toast messages
+    toast: {
+      success: (content) => message.success(content),
+      error: (content) => message.error(content),
+      warning: (content) => message.warning(content),
+      info: (content) => message.info(content),
+      loading: (content) => message.loading(content),
+    }
+  };
+};
 
-const error = (title, desc) => {
-  notification.open({
-    placement: 'topRight',
-    message: title,
-    type: 'error',
-    description:
-      desc
-  });
-}
-
-const Notify = {
-  success,
-  warning,
-  error
-}
-
-export default Notify
+export default useNotify;
 

@@ -1,47 +1,38 @@
 import AxiosRequest from '../ApiRequest/ApiRequest';
-import Notify from '../Notify/Notify';
 
 const Login = async (values) => {
     try {
-        const response = await AxiosRequest.post('/login', values);
+        const response = await AxiosRequest.post('/api/auth/login', values);
         if (response.status === 200) {
-            let data = response.data.finalData;
-            console.log(response.data)
-            sessionStorage.setItem('JWTAccessToken', data.JWTAccessToken);
-            localStorage.setItem('User', data.userDetails);
-            window.location.replace("/home/todolist");
+            const { JWTAccessToken, userDetails } = response.data.finalData;
+            sessionStorage.setItem('JWTAccessToken', JWTAccessToken);
+            localStorage.setItem('User', userDetails);
+            window.location.replace('/dashboard');
+            return { success: true };
         } else {
             throw new Error('error logging in');
         }
-    }
-    catch (error) {
-        console.log(error)
-        Notify.error('Login', 'Login username or password incorrect!')
-        return null;
+    } catch (error) {
+        console.log(error);
+        return { success: false, error: error.response?.data?.error || 'Login username or password incorrect!' };
     }
 };
 
 const Register = async (values) => {
-
-
     try {
-        const response = await AxiosRequest.post('/register', values);
-        if (response.status === 200) {
-            Notify.success('Register', 'User registered successfully, Redirecting to Login Page...');
-            setTimeout(() =>{
-                window.location.replace("/login");
-            }, 1500)
-        } else if (response.status === 201) {
-            Notify.warning('Register', 'Username is already registered');
-        } 
-        else {
+        const response = await AxiosRequest.post('/api/auth/register', values);
+        if (response.status === 201) {
+            return { success: true, message: 'User registered successfully!' };
+        } else {
             throw new Error('error registering user');
         }
-    }
-    catch (error) {
-        console.log(error)
-        Notify.error('Register', 'Something went wrong, please try again later')
-        return null;
+    } catch (error) {
+        console.log(error);
+        // Handle 409 Conflict (duplicate username)
+        if (error.response?.status === 409) {
+            return { success: false, error: 'Username is already registered' };
+        }
+        return { success: false, error: error.response?.data?.error || 'Something went wrong, please try again later' };
     }
 };
 

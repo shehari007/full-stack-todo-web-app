@@ -1,93 +1,71 @@
 import AxiosRequest from '../ApiRequest/ApiRequest';
-import Notify from '../Notify/Notify';
 
 const GetAllTodoList = async () => {
     try {
-        const response = await AxiosRequest.get('/getAll');
+        const response = await AxiosRequest.get('/api/todos');
         if (response.status === 200) {
-            return response.data.todoList
+            return response.data.todoList;
         } else {
             throw new Error('error getting list');
         }
-    }
-    catch (error) {
-        console.log(error)
-        Notify.error('Todo List', 'Error Getting List!')
+    } catch (error) {
+        console.log(error);
         return [];
     }
 };
 
 const CreateTodo = async (values) => {
     try {
-        const response = await AxiosRequest.post('/create', values);
-        if (response.status === 200) {
-            Notify.success('Todo List', 'Todo Task created successfully!');
+        const response = await AxiosRequest.post('/api/todos', values);
+        if (response.status === 201) {
             return true;
         } else {
             throw new Error('error creating task');
         }
-    }
-    catch (error) {
-        console.log(error)
-        Notify.error('Todo List', 'Error Creating Task!')
+    } catch (error) {
+        console.log(error);
         return false;
     }
 };
 
 const UpdateTodo = async (values, todoID) => {
-    console.log(values.id)
     try {
-        const response = await AxiosRequest.put(`/update/${todoID}`, values);
+        const response = await AxiosRequest.put(`/api/todos/${todoID}`, values);
         if (response.status === 200) {
-            Notify.success('Todo List', 'Todo Task updated successfully!');
             return true;
         } else {
             throw new Error('error updating task');
         }
-    }
-    catch (error) {
-        console.log(error)
-        Notify.error('Todo List', 'Error Updating Task!')
+    } catch (error) {
+        console.log(error);
         return false;
     }
 };
 
 const UpdateCheckTodo = async (todoID, checked) => {
     try {
-        const response = await AxiosRequest.put(`/updateCheck/${todoID}`, { checked: checked });
+        const response = await AxiosRequest.patch(`/api/todos/${todoID}/check`, { checked });
         if (response.status === 200) {
-            if (checked === true) {
-                Notify.success('Todo List', 'Todo Task Set Completed successfully!');
-            }
-            else {
-                Notify.success('Todo List', 'Todo Task Set incompleted successfully!');
-            }
             return true;
         } else {
             throw new Error('error updating task');
         }
-    }
-    catch (error) {
-        console.log(error)
-        Notify.error('Todo List', 'Error Updating Task!')
+    } catch (error) {
+        console.log(error);
         return false;
     }
 };
 
-
 const DelTodo = async (todoID) => {
     try {
-        const response = await AxiosRequest.delete(`/delete/${todoID}`);
+        const response = await AxiosRequest.delete(`/api/todos/${todoID}`);
         if (response.status === 200) {
-            Notify.success('Todo List', 'Todo Task deleted successfully!');
             return true;
         } else {
             throw new Error('error deleting task');
         }
-    }
-    catch (error) {
-        console.log(error)
-        Notify.error('Todo List', 'Error Deleting Task!')
+    } catch (error) {
+        console.log(error);
         return false;
     }
 };
@@ -97,6 +75,7 @@ const TodoListService = {
     CreateTodo,
     UpdateTodo,
     DelTodo,
-    UpdateCheckTodo
-}
-export default TodoListService
+    UpdateCheckTodo,
+};
+
+export default TodoListService;

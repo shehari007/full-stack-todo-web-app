@@ -1,33 +1,93 @@
-import React from 'react'
-import { Layout, theme, Space, Typography } from 'antd'
-import { PoweroffOutlined } from '@ant-design/icons';
+import React from 'react';
+import { Button, Dropdown, Space, Typography, Avatar, Tooltip } from 'antd';
+import { 
+  LogoutOutlined, 
+  SunOutlined, 
+  MoonOutlined,
+  UserOutlined,
+  SettingOutlined
+} from '@ant-design/icons';
+import { useTheme } from '../context/ThemeContext';
 import AuthService from '../utils/AuthService/AuthService';
 
-const { Link, Text } = Typography;
-const { Header } = Layout;
+const { Text } = Typography;
+
 const LayoutHeader = () => {
-    const {
-        token: { colorBgContainer },
-    } = theme.useToken();
-    return (
-        <Header
-            style={{
-                padding: 0,
-                background: colorBgContainer,
-                boxShadow: '0 5px 5px -5px #333',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignContent: 'space-between',
-            }}
-        >
-            <Space size="middle" align='start' style={{ marginLeft: '30px' }} >
-                <Text strong>Welcome! {localStorage.getItem('User')}</Text>
+  const { isDarkMode, toggleTheme } = useTheme();
+  const username = localStorage.getItem('User') || 'User';
+
+  const userMenuItems = [
+    {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: 'Profile',
+      disabled: true,
+    },
+    {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: 'Settings',
+      disabled: true,
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: 'Logout',
+      danger: true,
+      onClick: () => AuthService.LogOut(),
+    },
+  ];
+
+  const getInitials = (name) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  return (
+    <header className="app-header">
+      <div className="header-content">
+        <div className="header-left">
+          <div className="header-logo">
+            <img src="/main-logo.png" alt="TaskFlow" />
+            <h1>TaskFlow</h1>
+          </div>
+        </div>
+
+        <div className="header-right">
+          <Tooltip title={isDarkMode ? 'Light Mode' : 'Dark Mode'}>
+            <button className="theme-toggle" onClick={toggleTheme}>
+              {isDarkMode ? <SunOutlined /> : <MoonOutlined />}
+            </button>
+          </Tooltip>
+
+          <Dropdown
+            menu={{ items: userMenuItems }}
+            placement="bottomRight"
+            trigger={['click']}
+          >
+            <Space style={{ cursor: 'pointer' }}>
+              <Avatar 
+                style={{ 
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  cursor: 'pointer'
+                }}
+              >
+                {getInitials(username)}
+              </Avatar>
+              <Text strong className="user-name">{username}</Text>
             </Space>
-            <Space size="middle" align='end' style={{ marginRight: '30px' }} >
-                <Link type='danger' strong onClick={() => AuthService.LogOut()}><PoweroffOutlined /> Logout</Link>
-            </Space>
-        </Header>
-    )
-}
+          </Dropdown>
+        </div>
+      </div>
+    </header>
+  );
+};
 
 export default LayoutHeader;
