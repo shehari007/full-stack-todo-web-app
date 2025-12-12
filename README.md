@@ -234,9 +234,11 @@ SEQ_CONNECTION=your_postgres_connection_string
 ## 📸 Screenshots
 
 <div align="center">
-  <i>Light Mode Dashboard</i>
-  <br/><br/>
-  <i>Dark Mode with Task Management</i>
+   <img src="Screenshots/1.png" alt="TaskFlow light mode dashboard" width="900px" />
+   <br/><br/>
+   <img src="Screenshots/2.png" alt="TaskFlow dark mode dashboard" width="900px" />
+   <br/><br/>
+   <img src="Screenshots/3.png" alt="TaskFlow auth screens" width="900px" />
 </div>
 
 ---
