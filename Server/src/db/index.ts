@@ -43,6 +43,39 @@ export const pool = new Pool({
   ssl: env.DATABASE_SSL ? { rejectUnauthorized: false } : false,
 });
 
+/*
+ * Serverless against a session-mode pooler is the combination that runs out of
+ * connections.
+ *
+ * Session mode gives every client its own server connection and holds it for
+ * the life of that connection, which is exactly wrong when the number of
+ * clients is "however many instances the platform decided to keep warm".
+ * Supabase allows 15; a handful of warm functions reaches it and then every
+ * endpoint fails with EMAXCONNSESSION, including trivial ones, because the
+ * failure is getting a connection rather than running a query.
+ *
+ * Transaction mode multiplexes many clients onto few server connections, which
+ * is what this shape of deployment needs. It is safe here because nothing calls
+ * drizzle's `.prepare()`, so every statement is unnamed.
+ *
+ * Warned rather than switched automatically: migrations need session mode, and
+ * silently rewriting someone's connection string is worse than telling them.
+ */
+if (isServerless()) {
+  const { hostname, port } = new URL(env.DATABASE_URL);
+  const sessionModePort = port === '5432' || port === '';
+
+  if (/pooler\.supabase\.com$/i.test(hostname) && sessionModePort) {
+    logger.warn(
+      { hostname, port: port || '5432' },
+      'Running on serverless against the Supabase session pooler (port 5432). Each warm ' +
+        'instance holds its own connection, so this runs out at around 15 and every request ' +
+        'starts failing with EMAXCONNSESSION. Point DATABASE_URL at port 6543 (the transaction ' +
+        'pooler) for the deployed function, and keep 5432 for running migrations.',
+    );
+  }
+}
+
 pool.on('error', (error) => {
   // An idle client failing is recoverable: pg discards it and opens another.
   logger.error({ err: error }, 'Unexpected database pool error');
