@@ -1,7 +1,54 @@
-# Auto detect text files and perform LF normalization
-* text=auto
-Server/node_modules
-Frontend/node_modules
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
 
-Frontend/.env
-Server/.env
+# Secrets. Never commit these.
+# The wildcard is deliberate: `.env` and `.env.local` alone would still have let
+# an ad-hoc `.env.staging` or `.env.verify` be committed by accident.
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Test and coverage
+coverage/
+.nyc_output/
+
+# Logs and runtime scratch
+*.log
+*.pid
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# AI coding assistant files.
+# `next dev` rewrites AGENTS.md on every run, so ignoring it keeps `git status`
+# clean instead of showing the same regenerated file as a change forever.
+AGENTS.md
+CLAUDE.md
+.claude/
+.cursor/
+.aider*
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Vercel
+.vercel
+
+# Drizzle scratch output. Generated migrations under drizzle/ ARE committed.
+drizzle/meta/_journal.json.bak

@@ -1,0 +1,191 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A newer commit on the same branch makes an in-flight run pointless.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: taskflow_ci
+        ports:
+          - 5432:5432
+        # The job's first step does not start until pg_isready succeeds, so the
+        # migration can never race the database's own startup.
+        options: >-
+          --health-cmd "pg_isready -U postgres -d taskflow_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # What the API reads. Each of these is declared and validated by
+      # Server/src/config/env.ts, which exits at boot naming anything missing
+      # or unsafe. Unset keys fall back to the defaults declared there.
+      NODE_ENV: development
+      PORT: '8000'
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/taskflow_ci
+      DATABASE_SSL: 'false'
+      # Plain HTTP inside the runner, so the cookies must not be Secure-only.
+      COOKIE_SECURE: 'false'
+      COOKIE_SAME_SITE: lax
+      # Nothing is proxying this server; trusting X-Forwarded-For would let a
+      # request choose its own rate-limit key.
+      TRUST_PROXY: '0'
+      ALLOWED_ORIGINS: http://localhost:3000
+      APP_URL: http://localhost:3000
+      ROOT_USERNAME: root
+      ROOT_EMAIL: root@taskflow.local
+      # Read by Server/scripts/smoke-test.mjs. SMOKE_PASSWORD is generated below.
+      SMOKE_BASE_URL: http://localhost:8000
+      SMOKE_USERNAME: root
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: Server
+        run: npm ci
+
+      # Throwaway values, regenerated every run. Nothing here is a real secret
+      # and nothing outlives the job, so there is no repository secret to leak.
+      - name: Generate secrets
+        run: |
+          root_password="$(openssl rand -base64 24)"
+          # The seed prints the root password in a banner; keep it out of the log.
+          echo "::add-mask::$root_password"
+          {
+            echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)"
+            echo "JWT_REFRESH_SECRET=$(openssl rand -hex 32)"
+            echo "ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "ROOT_PASSWORD=$root_password"
+            echo "SMOKE_PASSWORD=$root_password"
+          } >> "$GITHUB_ENV"
+
+      - name: Typecheck
+        working-directory: Server
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: Server
+        run: npm run build
+
+      - name: Apply migrations
+        working-directory: Server
+        run: npm run db:migrate
+
+      - name: Seed the installation
+        working-directory: Server
+        run: npm run db:seed
+
+      # `npm start` runs the compiled dist/, so this also proves the build output
+      # boots rather than only that tsc was happy with it.
+      - name: Start the API
+        working-directory: Server
+        run: |
+          nohup npm start > "$RUNNER_TEMP/api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/api.pid"
+
+      - name: Wait for the API to answer
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS "$SMOKE_BASE_URL/api/health" > /dev/null 2>&1; then
+              echo "API ready after ${attempt}s."
+              exit 0
+            fi
+            # A process that has already exited will never become ready, so fail
+            # with its log now instead of after the full timeout.
+            if ! kill -0 "$(cat "$RUNNER_TEMP/api.pid")" 2> /dev/null; then
+              echo "The API exited before it was ready:"
+              cat "$RUNNER_TEMP/api.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "The API did not answer /api/health within 60s:"
+          cat "$RUNNER_TEMP/api.log"
+          exit 1
+
+      - name: Smoke test
+        working-directory: Server
+        run: npm run test:smoke
+
+      - name: Personal access token and public API test
+        working-directory: Server
+        run: npm run test:tokens
+
+      - name: Support desk and contact form test
+        working-directory: Server
+        run: npm run test:support
+
+      # Last, because it deliberately exhausts the sign-in rate limiter. Any
+      # auth request after it would fail for reasons unrelated to the change.
+      - name: Security regression test
+        working-directory: Server
+        run: npm run test:security
+
+      - name: API log
+        if: failure()
+        run: cat "$RUNNER_TEMP/api.log"
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: Frontend
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: Frontend
+        run: npm run typecheck
+
+      # No API is running here, and none is needed: the root layout reads cookies
+      # and so renders dynamically, and every server-side fetch falls back to the
+      # defaults in src/lib/settings-defaults.ts when the API is unreachable.
+      - name: Build
+        working-directory: Frontend
+        run: npm run build

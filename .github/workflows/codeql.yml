@@ -1,0 +1,54 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Mondays at 04:27 UTC. The weekly run matters because CodeQL's queries are
+    # updated between our commits. A rule added tomorrow should still be applied
+    # to code that has not changed since today.
+    - cron: '27 4 * * 1'
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      # Required to upload the results to the Security tab.
+      security-events: write
+      # Required to fetch the CodeQL query packs.
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # One analysis covers both packages: javascript-typescript reads the
+          # sources directly, so there is nothing to compile first.
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: '/language:${{ matrix.language }}'

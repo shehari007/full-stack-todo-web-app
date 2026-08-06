@@ -1,0 +1,40 @@
+# Anything not needed to compile or run the API. Keeping this tight is not just
+# about image size: everything listed here would otherwise be sent to the Docker
+# daemon as build context, and .env would end up inside the image.
+
+# Dependencies. Reinstalled from package-lock.json inside the build.
+node_modules
+
+# Build output. Produced inside the build, never copied in.
+dist
+*.tsbuildinfo
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local scratch and probe scripts
+__*
+*.pdf
+
+# Tests and tooling that never run in the image
+scripts
+src/**/*.test.ts
+src/**/__tests__
+
+# Platform config for other deployment targets
+vercel.json
+api
+.vercel
+
+# VCS and editors
+.git
+.gitignore
+.github
+.idea
+.vscode
+
+# Docker's own files
+Dockerfile
+.dockerignore
