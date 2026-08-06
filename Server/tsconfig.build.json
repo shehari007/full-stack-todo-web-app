@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "sourceMap": false
+    "sourceMap": false,
+    /* Emit settings live here rather than in the base config so that the base
+       can also cover api/, which sits outside rootDir. */
+    "outDir": "dist",
+    "rootDir": "src"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/__tests__/**"]

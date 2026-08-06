@@ -23,7 +23,12 @@ Frontend/   Next.js 16 App Router web app. React 19, Ant Design 6.
 docs/       Documentation, including this file.
 ```
 
-Both packages declare `"engines": { "node": ">=20.9.0" }`. CI runs Node 22.
+Both packages declare an `engines.node` range with an upper bound (`>=20.9.0 <25.0.0`). CI runs Node 22.
+
+The upper bound is deliberate. Vercel resolves `engines.node` to the highest
+matching release it offers, so an open-ended range silently moves the runtime to
+a new major the day it ships. Bounding it means the Node version changes when
+someone edits this file, not when a release happens.
 
 ## Conventions
 

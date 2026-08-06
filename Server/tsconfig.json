@@ -7,9 +7,9 @@
     "moduleResolution": "NodeNext",
     "types": ["node"],
 
-    /* Emit */
-    "outDir": "dist",
-    "rootDir": "src",
+    /* Emit. `outDir` and `rootDir` live in tsconfig.build.json instead, so that
+       this config can typecheck files outside src/ (the Vercel entrypoint in
+       api/) without tripping the "not under rootDir" error. */
     "sourceMap": true,
     "declaration": false,
     "removeComments": false,
@@ -30,6 +30,9 @@
     "skipLibCheck": true,
     "isolatedModules": true
   },
-  "include": ["src/**/*.ts"],
+  /* `api/` holds the Vercel entrypoint. It is not part of the tsc build (Vercel
+     compiles it itself), but it must still be typechecked, or a broken import
+     there is only discovered by a failed deploy. */
+  "include": ["src/**/*.ts", "api/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

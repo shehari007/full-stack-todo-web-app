@@ -286,9 +286,9 @@ On a managed platform:
 
 ```json
 {
+  "installCommand": "npm ci --include=dev",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm ci",
+  "outputDirectory": "public",
   "framework": null,
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
   "functions": { "api/index.ts": { "maxDuration": 30 } }
@@ -296,6 +296,11 @@ On a managed platform:
 ```
 
 `api/index.ts` exports the same configured app as `src/index.ts`; it just does not call `listen`. Routes, middleware and the pool are identical. Set `TRUST_PROXY=1`.
+
+Two details in that config are not incidental, and both were originally wrong:
+
+- **`--include=dev` is required.** Vercel builds with `NODE_ENV=production`, and npm omits `devDependencies` when it sees that. `typescript` is a dev dependency, so a plain `npm ci` installs 201 packages, none of them the compiler, and `npm run build` fails with `sh: line 1: tsc: command not found`.
+- **`outputDirectory` must not be `dist`.** Vercel publishes everything in the output directory as static files at the site root, so pointing it at the compiler's output puts the entire server on the public internet: `/config/env.js`, `/db/seed.js` and the rest, fetchable by anyone. `Server/public/` exists and is empty for exactly this reason. The catch-all rewrite sends real traffic to the function regardless.
 
 Two things genuinely behave worse this way, and you should choose it knowing them:
 
