@@ -21,8 +21,55 @@ const { Pool } = pg;
  */
 pg.types.setTypeParser(pg.types.builtins.INT8, (value) => Number.parseInt(value, 10));
 
+/**
+ * The connection string this process should actually use.
+ *
+ * Serverless against a session-mode pooler is the one combination that cannot
+ * work. Session mode gives every client its own server connection and holds it
+ * for the life of that connection, while the number of clients is "however many
+ * instances the platform decided to keep warm". Supabase allows 15, so a
+ * handful of warm functions exhausts it and then *every* request fails with
+ * `EMAXCONNSESSION`, including ones that only wanted to read a single settings
+ * row, because what failed was acquiring a connection rather than running a
+ * query.
+ *
+ * Transaction mode (port 6543) multiplexes many clients onto few server
+ * connections, which is exactly this shape of deployment. It is safe here
+ * because nothing calls drizzle's `.prepare()`, so every statement is unnamed
+ * and can move between backends freely.
+ *
+ * This is corrected rather than merely warned about because the correct value
+ * depends on where the process is running, not on what the operator intended:
+ * the same connection string is right locally and wrong on Vercel. Migrations
+ * still need session mode, and they never run here, so the rewrite is confined
+ * to serverless. Set `DATABASE_NO_POOL_UPGRADE=true` to opt out.
+ */
+function resolveConnectionString(): string {
+  if (!isServerless() || process.env.DATABASE_NO_POOL_UPGRADE === 'true') {
+    return env.DATABASE_URL;
+  }
+
+  const url = new URL(env.DATABASE_URL);
+  const onSessionPort = url.port === '5432' || url.port === '';
+
+  if (!/pooler\.supabase\.com$/i.test(url.hostname) || !onSessionPort) {
+    return env.DATABASE_URL;
+  }
+
+  url.port = '6543';
+
+  logger.warn(
+    { hostname: url.hostname, from: 5432, to: 6543 },
+    'Serverless runtime detected against the Supabase session pooler. Using the transaction ' +
+      'pooler on 6543 instead, because session mode runs out of connections at around 15 warm ' +
+      'instances. Set DATABASE_NO_POOL_UPGRADE=true to keep 5432.',
+  );
+
+  return url.toString();
+}
+
 export const pool = new Pool({
-  connectionString: env.DATABASE_URL,
+  connectionString: resolveConnectionString(),
   max: env.DATABASE_POOL_MAX,
   /*
    * Idle connections are given up quickly on serverless.
@@ -42,39 +89,6 @@ export const pool = new Pool({
    */
   ssl: env.DATABASE_SSL ? { rejectUnauthorized: false } : false,
 });
-
-/*
- * Serverless against a session-mode pooler is the combination that runs out of
- * connections.
- *
- * Session mode gives every client its own server connection and holds it for
- * the life of that connection, which is exactly wrong when the number of
- * clients is "however many instances the platform decided to keep warm".
- * Supabase allows 15; a handful of warm functions reaches it and then every
- * endpoint fails with EMAXCONNSESSION, including trivial ones, because the
- * failure is getting a connection rather than running a query.
- *
- * Transaction mode multiplexes many clients onto few server connections, which
- * is what this shape of deployment needs. It is safe here because nothing calls
- * drizzle's `.prepare()`, so every statement is unnamed.
- *
- * Warned rather than switched automatically: migrations need session mode, and
- * silently rewriting someone's connection string is worse than telling them.
- */
-if (isServerless()) {
-  const { hostname, port } = new URL(env.DATABASE_URL);
-  const sessionModePort = port === '5432' || port === '';
-
-  if (/pooler\.supabase\.com$/i.test(hostname) && sessionModePort) {
-    logger.warn(
-      { hostname, port: port || '5432' },
-      'Running on serverless against the Supabase session pooler (port 5432). Each warm ' +
-        'instance holds its own connection, so this runs out at around 15 and every request ' +
-        'starts failing with EMAXCONNSESSION. Point DATABASE_URL at port 6543 (the transaction ' +
-        'pooler) for the deployed function, and keep 5432 for running migrations.',
-    );
-  }
-}
 
 pool.on('error', (error) => {
   // An idle client failing is recoverable: pg discards it and opens another.

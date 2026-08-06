@@ -117,6 +117,8 @@ Two details matter and both are easy to get wrong.
 
 **Start with the session pooler on port 5432.** Supabase's dashboard offers both it and the transaction pooler on 6543. The session pooler gives each client its own server connection, which is what a long-running container wants, and it is the only one that supports the DDL and advisory locks migrations need.
 
+On serverless the app switches to the transaction pooler by itself: if it detects a serverless runtime and a `DATABASE_URL` pointing at a Supabase pooler on 5432, it connects on 6543 instead and logs that it did. Set `DATABASE_NO_POOL_UPGRADE=true` to prevent that. The rewrite is confined to serverless because migrations need session mode and never run there.
+
 The transaction pooler is the better choice for serverless, and it does work here: drizzle only sends a named prepared statement when you call `.prepare()`, which this codebase never does, so every statement is unnamed and safe to multiplex. Use 6543 for the deployed function and 5432 when running migrations. The session pooler string looks like this:
 
 ```ini

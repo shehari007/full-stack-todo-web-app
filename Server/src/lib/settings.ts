@@ -60,30 +60,83 @@ function reconcile<K extends SettingsKey>(key: K, stored: unknown): SettingsShap
   return parsed.data as SettingsShape[K];
 }
 
+/**
+ * How long to keep serving a stale or default section after a read fails.
+ *
+ * Short enough that recovery is quick, long enough that a database under
+ * pressure is not asked again by every single request while it is struggling.
+ */
+const FAILURE_BACKOFF_MS = 5_000;
+
+/**
+ * Read one section, degrading rather than failing.
+ *
+ * This is called on every request through `maintenanceGate`, so throwing here
+ * turns any database hiccup into a 500 on *everything*, including routes that
+ * never needed a setting. A file download failing because the server could not
+ * check whether maintenance mode was on is the wrong trade.
+ *
+ * The order of preference on failure is: the last value we successfully read,
+ * then the shipped defaults. Both are safe. `maintenanceMode` defaults to false
+ * and `registrationEnabled` to true, so a blip opens the site rather than
+ * closing it, and the real values return as soon as the database does.
+ */
 export async function getSettings<K extends SettingsKey>(key: K): Promise<SettingsShape[K]> {
   const cached = cache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.value as SettingsShape[K];
   }
 
-  const [row] = await db
-    .select({ value: siteSettings.value })
-    .from(siteSettings)
-    .where(eq(siteSettings.key, key))
-    .limit(1);
+  try {
+    const [row] = await db
+      .select({ value: siteSettings.value })
+      .from(siteSettings)
+      .where(eq(siteSettings.key, key))
+      .limit(1);
 
-  const value = reconcile(key, row?.value);
-  cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
-  return value;
+    const value = reconcile(key, row?.value);
+    cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+    return value;
+  } catch (error) {
+    const fallback = (cached?.value ?? defaultsFor(key)) as SettingsShape[K];
+
+    logger.warn(
+      { err: error, key, servedFrom: cached ? 'expired cache' : 'defaults' },
+      'Could not read site settings, serving the last known good values',
+    );
+
+    cache.set(key, { value: fallback, expiresAt: Date.now() + FAILURE_BACKOFF_MS });
+    return fallback;
+  }
 }
 
 /** Every section at once. Used by the admin panel and the public settings feed. */
 export async function getAllSettings(): Promise<SettingsShape> {
-  const rows = await db
-    .select({ key: siteSettings.key, value: siteSettings.value })
-    .from(siteSettings);
+  let byKey: Map<string, unknown>;
 
-  const byKey = new Map(rows.map((row) => [row.key, row.value]));
+  try {
+    const rows = await db
+      .select({ key: siteSettings.key, value: siteSettings.value })
+      .from(siteSettings);
+    byKey = new Map(rows.map((row) => [row.key, row.value]));
+  } catch (error) {
+    /*
+     * Degrade the same way `getSettings` does. This one feeds the public
+     * settings endpoint that the web app reads for every server render, so a
+     * throw here takes down the marketing and legal pages as well as the app.
+     */
+    logger.warn(
+      { err: error },
+      'Could not read site settings, serving cached or default values',
+    );
+
+    const result = {} as SettingsShape;
+    for (const key of SETTINGS_KEYS) {
+      result[key] = (cache.get(key)?.value ?? defaultsFor(key)) as never;
+    }
+    return result;
+  }
+
   const result = {} as SettingsShape;
 
   for (const key of SETTINGS_KEYS) {
