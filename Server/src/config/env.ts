@@ -24,6 +24,22 @@ const booleanish = z
 
 const bytes = z.coerce.number().int().positive();
 
+/**
+ * Whether this process is a short-lived function invocation rather than a
+ * long-running server.
+ *
+ * Read from the platform's own variables. Vercel, AWS Lambda and Netlify each
+ * set one, and none of them are set by a container or a laptop.
+ */
+export function isServerless(): boolean {
+  return Boolean(
+    process.env.VERCEL ??
+      process.env.AWS_LAMBDA_FUNCTION_NAME ??
+      process.env.NETLIFY ??
+      process.env.FUNCTIONS_WORKER_RUNTIME,
+  );
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(8000),
@@ -45,7 +61,22 @@ const schema = z.object({
   DATABASE_URL: z.string().url('must be a postgres:// connection string'),
   /** Supabase and most hosted Postgres require TLS; local Postgres usually does not. */
   DATABASE_SSL: booleanish.default(false),
-  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  /**
+   * Connections this process may hold.
+   *
+   * The default is per-process, and on serverless that is the wrong unit: every
+   * warm instance keeps its own pool, so the number that reaches the database is
+   * this value multiplied by however many instances are alive. Supabase's
+   * session pooler allows 15 in total, and a single analytics request fans out
+   * to five queries at once, so a default of 10 exhausts the limit at two or
+   * three concurrent instances with `EMAXCONNSESSION`.
+   *
+   * One is the right default there. A serverless instance serves one request at
+   * a time, so a larger pool buys nothing except parallelism inside a single
+   * request, and pays for it with connections every other instance then cannot
+   * have.
+   */
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(isServerless() ? 1 : 10),
 
   /** Signing keys. Access and refresh are separate so leaking one does not grant the other. */
   JWT_ACCESS_SECRET: secret,

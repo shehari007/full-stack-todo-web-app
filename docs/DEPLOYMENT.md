@@ -115,7 +115,9 @@ Leave `DATABASE_SSL=false` for local Postgres. It is not listening for TLS, and 
 
 Two details matter and both are easy to get wrong.
 
-**Use the session pooler on port 5432, not the transaction pooler on 6543.** Supabase's dashboard offers both. Drizzle issues prepared statements, and the transaction pooler does not support them; you get failures that look like random query errors rather than a clear configuration problem. The session pooler string looks like this:
+**Start with the session pooler on port 5432.** Supabase's dashboard offers both it and the transaction pooler on 6543. The session pooler gives each client its own server connection, which is what a long-running container wants, and it is the only one that supports the DDL and advisory locks migrations need.
+
+The transaction pooler is the better choice for serverless, and it does work here: drizzle only sends a named prepared statement when you call `.prepare()`, which this codebase never does, so every statement is unnamed and safe to multiplex. Use 6543 for the deployed function and 5432 when running migrations. The session pooler string looks like this:
 
 ```ini
 DATABASE_URL=postgres://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
@@ -125,8 +127,8 @@ DATABASE_URL=postgres://postgres.<project-ref>:<password>@aws-0-<region>.pooler.
 
 ```ini
 DATABASE_SSL=true
-DATABASE_POOL_MAX=10     # long-running container
-DATABASE_POOL_MAX=3      # serverless: see §4
+DATABASE_POOL_MAX=10     # long-running container (the default)
+# On serverless the default is already 1. Do not raise it without reading §4.
 ```
 
 `DATABASE_SSL=true` connects with `rejectUnauthorized: false` (`Server/src/db/index.ts`). That is deliberate: Supabase, Neon and Railway terminate TLS at a proxy whose certificate does not match the connection host, so strict verification fails against a perfectly legitimate endpoint. The transport is still encrypted.
@@ -304,7 +306,13 @@ Two details in that config are not incidental, and both were originally wrong:
 
 Two things genuinely behave worse this way, and you should choose it knowing them:
 
-1. **Connection pools are per instance.** Each warm lambda holds its own `pg.Pool`, so total connections scale with concurrency rather than with your configuration. Use Supabase's session pooler (port 5432) and set `DATABASE_POOL_MAX` to something small: 1 to 3. Even then, a traffic spike can exhaust the connection cap in a way a single container never would.
+1. **Connection pools are per instance.** Each warm lambda holds its own `pg.Pool`, so the number reaching the database is `DATABASE_POOL_MAX x live instances`, not whatever you configured.
+
+   The default handles this: on a platform that sets `VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `NETLIFY` or `FUNCTIONS_WORKER_RUNTIME`, `DATABASE_POOL_MAX` defaults to **1** instead of 10. A serverless instance serves one request at a time, so a larger pool only adds parallelism within a single request and takes connections every other instance then cannot have. Supabase's session pooler allows 15 in total, and one analytics request fans out to five queries at once, so a pool of 10 exhausts the cap at two or three warm instances and every endpoint starts failing with `EMAXCONNSESSION`.
+
+   If you raise it, keep `DATABASE_POOL_MAX x expected instances` under the cap. Supabase shows yours under Database, Connection pooling.
+
+   Beyond a handful of instances, move to the **transaction pooler** (port 6543). It multiplexes many clients onto few server connections, which is what serverless actually needs. It is compatible here because the code never calls drizzle's `.prepare()`, so every statement is unnamed. Migrations still need the session pooler on 5432.
 2. **Rate-limit counters are per instance.** The default `express-rate-limit` store is process memory. Across *n* live instances the effective limit is roughly *n* times what is configured, including on the sign-in and MFA endpoints where the limit is the defence. For anything public, add a shared store first (see §8).
 
 A third, smaller constraint: `maxDuration` is 30 seconds. Exports build their document in memory, and a first analytics purge over a large table is a single large `DELETE`; those are the operations most likely to approach it.
@@ -378,7 +386,7 @@ Copy `Server/.env.example` and fill it in. Only four variables have no default.
 | `LOG_LEVEL` | no | `info` | pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace`. `debug` and `trace` also switch on Drizzle SQL logging. |
 | `TRUST_PROXY` | no | `0` | Number of proxies in front (0-10), or `false`. Decides whether `X-Forwarded-For` is trusted for `req.ip`, the rate-limiter key. |
 | `DATABASE_SSL` | no | `false` | Connect to Postgres over TLS. Required by Supabase and most hosted Postgres. |
-| `DATABASE_POOL_MAX` | no | `10` | Maximum pooled connections **per process** (1-100). |
+| `DATABASE_POOL_MAX` | no | `10`, or `1` on serverless | Maximum pooled connections **per process** (1-100). The default drops to 1 when `VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `NETLIFY` or `FUNCTIONS_WORKER_RUNTIME` is set. |
 | `ACCESS_TOKEN_TTL` | no | `15m` | Access-token lifetime, as `30s` / `15m` / `2h` / `7d`. |
 | `REFRESH_TOKEN_TTL_DAYS` | no | `30` | Refresh-token lifetime in days (1-365). |
 | `ALLOWED_ORIGINS` | no | `http://localhost:3000` | Comma-separated exact origins allowed to send credentialed requests. No wildcards. |

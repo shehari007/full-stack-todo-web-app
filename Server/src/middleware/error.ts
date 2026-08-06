@@ -10,7 +10,7 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { AppError } from '../lib/errors.js';
-import { isProduction } from '../config/env.js';
+import { env, isProduction, isServerless } from '../config/env.js';
 import { logger } from '../lib/logger.js';
 
 /** Terminal 404 for unmatched routes. */
@@ -42,6 +42,45 @@ const PG_ERROR_STATUS: Record<string, { status: number; code: string; message: s
 };
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  /*
+   * The connection pool is exhausted.
+   *
+   * Worth its own branch because the provider's wording ("max clients reached
+   * in session mode") describes their side of the problem and says nothing
+   * about the cause, which is almost always a per-process pool sized for a
+   * long-running server while running on serverless, where every warm instance
+   * keeps its own. Returning 503 is also more honest than 500: the request did
+   * not fail, it was never given a connection, and retrying may well work.
+   */
+  const poolExhausted =
+    typeof (err as Error)?.message === 'string' &&
+    /max clients|too many clients|EMAXCONN|remaining connection slots/i.test(
+      (err as Error).message,
+    );
+
+  if (poolExhausted) {
+    logger.error(
+      { err, requestId: req.id, poolMax: env.DATABASE_POOL_MAX, serverless: isServerless() },
+      isServerless()
+        ? 'Database connection pool exhausted. Each serverless instance holds its own pool, ' +
+            'so the total reaching the database is DATABASE_POOL_MAX times the number of live ' +
+            'instances. Lower DATABASE_POOL_MAX (1 is right for serverless), or move to the ' +
+            'provider transaction pooler.'
+        : 'Database connection pool exhausted. Raise DATABASE_POOL_MAX, or find the query ' +
+            'holding connections open.',
+    );
+
+    res.setHeader('Retry-After', '2');
+    res.status(503).json({
+      error: {
+        code: 'INTERNAL',
+        message: 'The server is briefly out of database connections. Please try again.',
+        requestId: req.id,
+      },
+    });
+    return;
+  }
+
   /* --- Errors we raised deliberately --- */
   if (err instanceof AppError) {
     logger[err.expected ? 'warn' : 'error'](

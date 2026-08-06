@@ -8,7 +8,7 @@
  */
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
-import { env } from '../config/env.js';
+import { env, isServerless } from '../config/env.js';
 import { logger } from '../lib/logger.js';
 import * as schema from './schema.js';
 
@@ -24,7 +24,16 @@ pg.types.setTypeParser(pg.types.builtins.INT8, (value) => Number.parseInt(value,
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   max: env.DATABASE_POOL_MAX,
-  idleTimeoutMillis: 30_000,
+  /*
+   * Idle connections are given up quickly on serverless.
+   *
+   * An instance sits idle between invocations while still holding whatever it
+   * opened, and those connections count against the provider's global limit the
+   * whole time. Releasing after ten seconds lets a frozen instance stop
+   * squatting on a slot another one needs. A long-running server has the
+   * opposite incentive and keeps them.
+   */
+  idleTimeoutMillis: isServerless() ? 10_000 : 30_000,
   connectionTimeoutMillis: 10_000,
   /**
    * Hosted Postgres (Supabase, Neon, Railway) terminates TLS at a proxy whose
